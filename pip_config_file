@@ -1,0 +1,3 @@
+[global]
+index-url = https://sid-jfrog-jioai:Jfrog@jioai123@devopsartifact.jio.com/artifactory/api/pypi/jioai-pypi-group/simple
+trusted-host = devopsartifact.jio.com

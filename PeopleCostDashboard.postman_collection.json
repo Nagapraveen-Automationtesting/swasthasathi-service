@@ -1,0 +1,688 @@
+{
+	"info": {
+		"_postman_id": "12345678-1234-1234-1234-123456789abc",
+		"name": "People Cost Dashboard API",
+		"description": "Complete API collection for People Cost Dashboard service with JWT authentication, user management, and file upload capabilities",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.success) {",
+									"        pm.environment.set('user_id', response.user_id);",
+									"        console.log('User registered successfully with ID:', response.user_id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_name\": \"John Doe\",\n    \"gender\": \"Male\",\n    \"dob\": \"1990-05-15\",\n    \"mobile_num\": \"+1234567890\",\n    \"email_id\": \"john.doe@example.com\",\n    \"address\": \"123 Main Street\",\n    \"city\": \"New York\",\n    \"blood_group\": \"O+\",\n    \"height\": 175.5,\n    \"weight\": 70.2,\n    \"diabetics\": false,\n    \"bp\": \"120/80\",\n    \"password\": \"securepassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/user/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Signup User (With Confirmation)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.success) {",
+									"        pm.environment.set('user_id', response.user_details.user_id);",
+									"        pm.environment.set('signup_email', response.user_details.email_id);",
+									"        console.log('User signup successful with confirmation!');",
+									"        console.log('User ID:', response.user_details.user_id);",
+									"        console.log('Health Profile Status:', response.additional_info.health_profile_status);",
+									"        console.log('Total Users in System:', response.additional_info.total_users_in_system);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_name\": \"Alice Johnson\",\n    \"gender\": \"Female\",\n    \"dob\": \"1988-07-12\",\n    \"mobile_num\": \"+1555123456\",\n    \"email_id\": \"alice.johnson@example.com\",\n    \"address\": \"456 Signup Street\",\n    \"city\": \"Boston\",\n    \"blood_group\": \"A-\",\n    \"height\": 165.0,\n    \"weight\": 58.5,\n    \"diabetics\": false,\n    \"bp\": \"115/75\",\n    \"password\": \"securesignup456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/user/signup",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"signup"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('access_token', response.access_token);",
+									"    pm.environment.set('refresh_token', response.refresh_token);",
+									"    pm.environment.set('user_id', response.user_info.user_id);",
+									"    pm.environment.set('email_id', response.user_info.email_id);",
+									"    pm.environment.set('mobile_num', response.user_info.mobile_num);",
+									"    console.log('Login successful. Tokens saved to environment.');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"securepassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/user/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('access_token', response.access_token);",
+									"    console.log('Token refreshed successfully.');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/user/refresh",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"refresh"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/user/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"logout"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Logout All Devices",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user/logout-all",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"logout-all"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "User Management",
+			"item": [
+				{
+					"name": "Get My Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"profile"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user/users?skip=0&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"users"
+							],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0",
+									"description": "Number of records to skip for pagination"
+								},
+								{
+									"key": "limit",
+									"value": "10",
+									"description": "Maximum number of records to return"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search Users",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user/users/search?q=john&skip=0&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"users",
+								"search"
+							],
+							"query": [
+								{
+									"key": "q",
+									"value": "john",
+									"description": "Search query (name, email, mobile, city)"
+								},
+								{
+									"key": "skip",
+									"value": "0",
+									"description": "Number of records to skip"
+								},
+								{
+									"key": "limit",
+									"value": "10",
+									"description": "Maximum number of records to return"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get User by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"users",
+								"{{user_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_name\": \"John Doe Updated\",\n    \"address\": \"456 Updated Street\",\n    \"city\": \"Boston\",\n    \"height\": 176.0,\n    \"weight\": 71.5,\n    \"bp\": \"125/82\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/user/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"users",
+								"{{user_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Deactivate User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"users",
+								"{{user_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"current_password\": \"securepassword123\",\n    \"new_password\": \"newsecurepassword456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/user/change-password",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"change-password"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "File Upload",
+			"item": [
+				{
+					"name": "Generate Upload URL",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.upload_url) {",
+									"        pm.environment.set('upload_url', response.upload_url);",
+									"        console.log('Upload URL generated:', response.upload_url);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "filename",
+									"value": "test-document.pdf",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/upload/generate-upload-url",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"upload",
+								"generate-upload-url"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Health Check",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Auto-refresh token if expired",
+					"const token = pm.environment.get('access_token');",
+					"const refreshToken = pm.environment.get('refresh_token');",
+					"",
+					"if (token && refreshToken) {",
+					"    // Check if token is expired (basic check - you can enhance this)",
+					"    try {",
+					"        const payload = JSON.parse(atob(token.split('.')[1]));",
+					"        const now = Math.floor(Date.now() / 1000);",
+					"        ",
+					"        // If token expires in less than 5 minutes, refresh it",
+					"        if (payload.exp && (payload.exp - now) < 300) {",
+					"            console.log('Token expiring soon, refreshing...');",
+					"            ",
+					"            pm.sendRequest({",
+					"                url: pm.environment.get('base_url') + '/user/refresh',",
+					"                method: 'POST',",
+					"                header: {",
+					"                    'Content-Type': 'application/json'",
+					"                },",
+					"                body: {",
+					"                    mode: 'raw',",
+					"                    raw: JSON.stringify({",
+					"                        refresh_token: refreshToken",
+					"                    })",
+					"                }",
+					"            }, (err, response) => {",
+					"                if (!err && response.code === 200) {",
+					"                    const responseJson = response.json();",
+					"                    pm.environment.set('access_token', responseJson.access_token);",
+					"                    console.log('Token refreshed successfully');",
+					"                } else {",
+					"                    console.log('Failed to refresh token:', err || response);",
+					"                }",
+					"            });",
+					"        }",
+					"    } catch (e) {",
+					"        console.log('Error checking token expiry:', e);",
+					"    }",
+					"}"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global test script",
+					"if (pm.response.code >= 400) {",
+					"    console.log('Request failed with status:', pm.response.code);",
+					"    console.log('Response:', pm.response.text());",
+					"    ",
+					"    // If unauthorized, clear tokens",
+					"    if (pm.response.code === 401) {",
+					"        pm.environment.unset('access_token');",
+					"        pm.environment.unset('refresh_token');",
+					"        console.log('Authentication failed. Tokens cleared.');",
+					"    }",
+					"} else {",
+					"    console.log('Request successful with status:', pm.response.code);",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		}
+	]
+}
