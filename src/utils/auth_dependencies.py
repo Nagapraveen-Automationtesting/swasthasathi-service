@@ -1,9 +1,13 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
+from src.config.logging_config import get_logger, log_security_event
 from src.utils.auth_utils import auth_utils
 from src.models.User_Model import UserInDB, TokenData
 from src.db.mongo_db import mongo
+
+# Get logger for this module
+logger = get_logger(__name__)
 
 # HTTP Bearer token scheme
 security = HTTPBearer()
@@ -60,7 +64,7 @@ async def get_current_user(token_data: TokenData = Depends(get_current_user_toke
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error getting current user: {e}")
+        logger.error(f"Error getting current user: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate user"

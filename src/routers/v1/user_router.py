@@ -4,7 +4,10 @@ import json
 from datetime import datetime, date
 from fastapi import APIRouter, Body, Depends, HTTPException, status, Query, Request
 
-from src.config.settings import logger
+from src.config.logging_config import get_logger, log_api_request, log_api_response, log_security_event
+
+# Get logger for this module
+logger = get_logger(__name__)
 from src.db.mongo_db import mongo
 from src.models.User_Model import (
     GETUSER, CREATE_USER, UPDATE_USER, LOGIN_MODEL, Token, 
@@ -177,7 +180,7 @@ async def signup(user_data: CREATE_USER = Body(...)):
     Creates user in database and returns detailed confirmation
     """
     try:
-        # Log parsed data for debugging
+        # Log parsed data
         logger.info(f"📋 /signup received user_data: {user_data}")
         
         # Validate required fields
@@ -288,88 +291,7 @@ async def signup(user_data: CREATE_USER = Body(...)):
         )
 
 
-def convert_form_data_to_create_user(form_data: FORM_SIGNUP_DATA) -> CREATE_USER:
-    """
-    Convert form data to CREATE_USER format with proper type conversions
-    """
-    try:
-        # Convert date string to date object
-        try:
-            print(type(form_data.dob))
-            # dob = datetime.strptime(form_data.dob, "%Y-%m-%d").date()
-            dob = form_data.dob
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid date format. Please use YYYY-MM-DD format."
-            )
-        
-        # Convert string values to appropriate types
-        height = None
-        if form_data.height and form_data.height:
-            try:
-                height = float(form_data.height)
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid height value. Please provide a numeric value."
-                )
-        
-        weight = None
-        if form_data.weight and form_data.weight:
-            try:
-                weight = float(form_data.weight)
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid weight value. Please provide a numeric value."
-                )
-        
-        # Convert string booleans to actual booleans
-        allow_notifications = form_data.allow_notifications == True if form_data.allow_notifications else True
-        agree_to_terms = form_data.agree_to_terms == True if form_data.agree_to_terms else True
-        agree_to_privacy = form_data.agree_to_privacy == True if form_data.agree_to_privacy else True
-        
-        # Check if user has diabetes based on medical conditions
-        diabetics = False
-        if form_data.medical_conditions:
-            medical_conditions_lower = form_data.medical_conditions
-            diabetics = "diabetes" in medical_conditions_lower or "diabetic" in medical_conditions_lower
-        
-        # Create CREATE_USER object
-        create_user_data = CREATE_USER(
-            user_name=form_data.user_name,
-            gender=form_data.gender,
-            dob=dob,
-            mobile_num=form_data.mobile_num,
-            email_id=form_data.email_id,
-            address="Not provided",  # Not in form data
-            city="Not provided",     # Not in form data
-            blood_group=form_data.blood_group,
-            height=height,
-            weight=weight,
-            diabetics=diabetics,
-            bp=None,  # Not in form data
-            password=form_data.password,
-            emergency_contact_name=form_data.emergency_contact_name,
-            emergency_contact_phone=form_data.emergency_contact_phone,
-            emergency_contact_relation=form_data.emergency_contact_relation,
-            medical_conditions=form_data.medical_conditions,
-            allow_notifications=allow_notifications,
-            agree_to_terms=agree_to_terms,
-            agree_to_privacy=agree_to_privacy
-        )
-        
-        return create_user_data
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error converting form data: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid form data: {str(e)}"
-        )
+# Removed duplicate conversion function - FORM_SIGNUP_DATA is now an alias of CREATE_USER
 
 
 @user_router.post("/signup-form", response_model=Dict[str, Any])
@@ -379,7 +301,7 @@ async def signup_form(form_data: FORM_SIGNUP_DATA = Body(...)):
     Handles form data structure and converts to internal format
     """
     try:
-        # Log parsed form data for debugging
+        # Log parsed form data
         logger.info(f"📋 /signup-form received form_data: {form_data}")
         
         # Validate required terms agreement
@@ -404,9 +326,10 @@ async def signup_form(form_data: FORM_SIGNUP_DATA = Body(...)):
             )
         
         # Convert form data to internal format
-        user_data = convert_form_data_to_create_user(form_data)
+        # Since FORM_SIGNUP_DATA is now an alias of CREATE_USER, use directly
+        user_data = form_data
         
-        print(f"user_data : {user_data}")
+        logger.debug(f"Processing signup for user: {user_data.email_id}")
         existing_user = await mongo.fetch_one("Users", {"email_id": user_data.email_id})
         if existing_user:
             raise HTTPException(

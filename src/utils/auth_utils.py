@@ -6,8 +6,12 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from src.config.settings import settings
+from src.config.logging_config import get_logger, log_function_call, log_database_operation, log_security_event
 from src.models.User_Model import TokenData, UserInDB
 from src.db.mongo_db import mongo
+
+# Get logger for this module
+logger = get_logger(__name__)
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -18,7 +22,6 @@ class AuthUtils:
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash"""
-        print(f"<<<<<<<<<<<<<<<<{plain_password} **** {hashed_password}>>>>>>>>>>>>>>>>>>")
         return pwd_context.verify(plain_password, hashed_password)
     
     @staticmethod
@@ -86,7 +89,7 @@ class AuthUtils:
         try:
             # Get user from database
             user_data = await mongo.fetch_one("Users", {"email_id": email})
-            print(f"Mongo result : {user_data}")
+            logger.debug(f"User authentication successful for email: {email}")
             if not user_data:
                 return None
             
@@ -101,14 +104,12 @@ class AuthUtils:
                 return None
             user_data.pop("_id")
             # Convert to UserInDB model
-            print()
-            print(type(user_data['dob']))
-            print()
+            # Date field processing completed
             user = UserInDB(**user_data)
             return user
             
         except Exception as e:
-            print(f"Authentication error: {e}")
+            logger.error(f"Authentication error: {e}")
             return None
     
     @staticmethod
@@ -180,7 +181,7 @@ class AuthUtils:
             return result is not None
             
         except Exception as e:
-            print(f"Error storing refresh token: {e}")
+            logger.error(f"Error storing refresh token: {e}")
             return False
     
     @staticmethod
@@ -227,7 +228,7 @@ class AuthUtils:
             }
             
         except Exception as e:
-            print(f"Error refreshing token: {e}")
+            logger.error(f"Error refreshing token: {e}")
             return None
     
     @staticmethod
@@ -241,7 +242,7 @@ class AuthUtils:
             )
             return result is not None
         except Exception as e:
-            print(f"Error revoking token: {e}")
+            logger.error(f"Error revoking token: {e}")
             return False
     
     @staticmethod
@@ -255,7 +256,7 @@ class AuthUtils:
             )
             return result is not None
         except Exception as e:
-            print(f"Error revoking user tokens: {e}")
+            logger.error(f"Error revoking user tokens: {e}")
             return False
     
     @staticmethod
@@ -268,7 +269,7 @@ class AuthUtils:
             )
             return result
         except Exception as e:
-            print(f"Error cleaning up tokens: {e}")
+            logger.error(f"Error cleaning up tokens: {e}")
             return None
 
 # Create instance for easy access

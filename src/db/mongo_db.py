@@ -4,6 +4,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional, List, Dict, Any
 
 from src.config.settings import settings
+from src.config.logging_config import get_logger, log_database_operation
+
+# Get logger for this module
+logger = get_logger(__name__)
 
 
 class MongoConnect:
@@ -14,8 +18,16 @@ class MongoConnect:
         self.db: Optional[Any] = None
 
     async def connect_to_mongo(self):
-        self.client = AsyncIOMotorClient(self.uri,  tls=True,
-    tlsAllowInvalidCertificates=True)
+        # Check if it's a local MongoDB connection
+        is_local = "localhost" in self.uri or "127.0.0.1" in self.uri
+        
+        if is_local:
+            # For local development, don't use TLS
+            self.client = AsyncIOMotorClient(self.uri)
+        else:
+            # For remote connections (like Azure CosmosDB), use TLS
+            self.client = AsyncIOMotorClient(self.uri, tls=True, tlsAllowInvalidCertificates=True)
+            
         self.db = self.client[self.db_name]
         print("✅ Connected to MongoDB")
 
@@ -50,7 +62,8 @@ class MongoConnect:
         result = await self.db[collection].insert_one(query)
         print(f"\n\n{result}\n\n")
         return {
-            "status": result.acknowledged
+            "status": result.acknowledged,
+            "inserted_id": result.inserted_id
         }
 
     async def update_many(self, collection: str, query: Dict, update: Dict) -> Dict:

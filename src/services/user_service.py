@@ -1,18 +1,25 @@
 import traceback
 from datetime import datetime
 from typing import Optional, Dict, Any
+from src.config.logging_config import get_logger, log_database_operation, log_function_call
 from src.db.mongo_db import mongo
 from src.models.User_Model import CREATE_USER, UPDATE_USER, UserInDB, USER_RESPONSE
 from src.utils.auth_utils import auth_utils
 from src.utils.util import convert_date_to_datetime
 
+# Get logger for this module
+logger = get_logger(__name__)
+
 
 async def create_user(request: CREATE_USER) -> Dict[str, Any]:
     """Create a new user with all required fields"""
+    start_time = datetime.utcnow()
     try:
+        log_function_call("create_user", {"email": request.email_id})
+        
         # Hash the password
         hashed_password = auth_utils.get_password_hash(request.password)
-        print(f"\n\n\nGoing into create_user :\n {request.password}\n\n\n\n")
+        logger.info(f"Creating new user account", extra={"email": request.email_id})
         
         # Get the next user_id (auto-increment simulation)
         last_user = await mongo.fetch_one(
@@ -21,6 +28,9 @@ async def create_user(request: CREATE_USER) -> Dict[str, Any]:
             sort=[("user_id", -1)]
         )
         next_user_id = (last_user["user_id"] + 1) if last_user else 1
+        
+        log_database_operation("find", "Users", {"sort": "user_id desc, limit 1"})
+        logger.debug(f"Generated new user_id: {next_user_id}")
 
         # Prepare user data with all fields
         user_data = {
@@ -52,21 +62,33 @@ async def create_user(request: CREATE_USER) -> Dict[str, Any]:
 
         # Insert user into database
         result = await mongo.insert_one("Users", user_data)
+        log_database_operation("insert", "Users", result_count=1 if result else 0)
         
         if result:
+            execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            logger.info(f"User created successfully", extra={
+                "user_id": next_user_id,
+                "email": request.email_id,
+                "execution_time": execution_time
+            })
             return {
                 "success": True,
                 "user_id": next_user_id,
                 "message": "User created successfully"
             }
         else:
+            logger.error(f"Failed to insert user into database", extra={"email": request.email_id})
             return {
                 "success": False,
                 "message": "Failed to create user"
             }
             
     except Exception as e:
-        print(f"Error creating user: {e}")
+        logger.error(f"Error creating user", extra={
+            "email": request.email_id,
+            "error": str(e),
+            "exception_type": type(e).__name__
+        }, exc_info=True)
         return {
             "success": False,
             "message": f"Error creating user: {str(e)}"
@@ -104,7 +126,7 @@ async def update_user(request: UPDATE_USER) -> Dict[str, Any]:
             }
             
     except Exception as e:
-        print(f"Error updating user: {e}")
+        logger.error(f"Error updating user: {e}")
         return {
             "success": False,
             "message": f"Error updating user: {str(e)}"
@@ -121,29 +143,44 @@ async def get_user_by_id(user_id: int) -> Optional[UserInDB]:
             return UserInDB(**user_data)
         return None
     except Exception as e:
-        print(f"Error fetching user: {e}")
+        logger.error(f"Error fetching user: {e}")
         return None
 
 
 async def get_user_by_email(email_id: str) -> Optional[UserInDB]:
     """Get user by email_id"""
     try:
+        log_function_call("get_user_by_email", {"email": email_id})
+        
         user_data = await mongo.fetch_one("Users", {"email_id": email_id})
+        log_database_operation("find", "Users", {"email_id": "***"}, result_count=1 if user_data else 0)
+        
         if user_data:
             # Remove MongoDB internal ID
             user_data.pop("_id", None)
+            logger.debug(f"User found by email", extra={"email": email_id, "user_id": user_data.get("user_id")})
             return UserInDB(**user_data)
+        
+        logger.debug(f"No user found with email", extra={"email": email_id})
         return None
     except Exception as e:
-        print(f"Error fetching user by email: {e}")
+        logger.error(f"Error fetching user by email", extra={
+            "email": email_id,
+            "error": str(e),
+            "exception_type": type(e).__name__
+        }, exc_info=True)
         return None
 
 
 async def get_all_users(skip: int = 0, limit: int = 100) -> Dict[str, Any]:
     """Get all users with pagination"""
+    start_time = datetime.utcnow()
     try:
+        log_function_call("get_all_users", {"skip": skip, "limit": limit})
+        
         # Count total users
         total_count = await mongo.count_documents("Users", {})
+        log_database_operation("count", "Users", {}, result_count=total_count)
         
         # Fetch users with pagination
         users_data = await mongo.fetch_many(
@@ -153,6 +190,7 @@ async def get_all_users(skip: int = 0, limit: int = 100) -> Dict[str, Any]:
             limit=limit,
             sort=[("created_on", -1)]
         )
+        log_database_operation("find", "Users", {"skip": skip, "limit": limit}, result_count=len(users_data))
         
         # Convert to response format (remove sensitive data)
         users = []
@@ -160,6 +198,15 @@ async def get_all_users(skip: int = 0, limit: int = 100) -> Dict[str, Any]:
             user_data.pop("_id", None)
             user_data.pop("hashed_password", None)
             users.append(USER_RESPONSE(**user_data))
+        
+        execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        logger.info(f"Retrieved users list", extra={
+            "total_count": total_count,
+            "returned_count": len(users),
+            "skip": skip,
+            "limit": limit,
+            "execution_time": execution_time
+        })
         
         return {
             "success": True,
@@ -170,7 +217,12 @@ async def get_all_users(skip: int = 0, limit: int = 100) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"Error fetching users: {e}")
+        logger.error(f"Error fetching users", extra={
+            "skip": skip,
+            "limit": limit,
+            "error": str(e),
+            "exception_type": type(e).__name__
+        }, exc_info=True)
         return {
             "success": False,
             "message": f"Error fetching users: {str(e)}",
@@ -200,7 +252,7 @@ async def delete_user(user_id: int) -> Dict[str, Any]:
             }
             
     except Exception as e:
-        print(f"Error deactivating user: {e}")
+        logger.error(f"Error deactivating user: {e}")
         return {
             "success": False,
             "message": f"Error deactivating user: {str(e)}"
@@ -249,7 +301,7 @@ async def search_users(query: str, skip: int = 0, limit: int = 50) -> Dict[str, 
         }
         
     except Exception as e:
-        print(f"Error searching users: {e}")
+        logger.error(f"Error searching users: {e}")
         return {
             "success": False,
             "message": f"Error searching users: {str(e)}",
