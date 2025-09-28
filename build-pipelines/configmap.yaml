@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: swasthasathi-service-config
+  namespace: default
+  labels:
+    app: swasthasathi-service
+    component: config
+data:
+  # Database Configuration
+  DATABASE: "swasthasathi_db"
+  
+  # Server Configuration
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  
+  # JWT Configuration
+  JWT_ALGORITHM: "HS256"
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+  JWT_REFRESH_TOKEN_EXPIRE_DAYS: "30"
+  
+  # Logging Configuration
+  LOG_LEVEL: "INFO"
+  LOG_TO_FILE: "true"
+  LOG_TO_CONSOLE: "true"
+  LOG_JSON_FORMAT: "true"
+  LOG_FILE_PATH: "logs/swasthasathi-service.log"
+  
+  # Debug Mode (set to false for production)
+  DEBUG: "false"
+  
+  # CORS Origins (update with your frontend URLs)
+  CORS_ORIGINS: "https://your-frontend-domain.com"

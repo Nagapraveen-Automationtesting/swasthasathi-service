@@ -1,0 +1,43 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: swasthasathi-service-ingress
+  namespace: default
+  labels:
+    app: swasthasathi-service
+  annotations:
+    # nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Uncomment for SSL/TLS
+spec:
+  ingressClassName: nginx  # Adjust based on your ingress controller
+  # tls:  # Uncomment for SSL/TLS
+  # - hosts:
+  #   - api.yourdomain.com
+  #   secretName: swasthasathi-service-tls
+  rules:
+  - host: api.yourdomain.com  # Replace with your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: swasthasathi-service
+            port:
+              number: 80
+  # Alternative rule without host (for testing with IP)
+  - http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: swasthasathi-service
+            port:
+              number: 80

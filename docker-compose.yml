@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  swasthasathi-service:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      - MONGO_CONNECTION_STRING=mongodb://mongo:27017
+      - DATABASE=swasthasathi_db
+      
+      # Azure Blob Storage (set these in your .env file)
+      - BLOB_KEY=${BLOB_KEY}
+      - BLOB_ACCOUNT_NAME=${BLOB_ACCOUNT_NAME}
+      - BLOB_CONTAINER=${BLOB_CONTAINER}
+      
+      # OCR Service
+      - OCR_BASE_URL=${OCR_BASE_URL}
+      
+      # JWT Configuration (set these in your .env file)
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=30
+      
+      # Server Configuration
+      - HOST=0.0.0.0
+      - PORT=8000
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      
+      # Logging Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_TO_FILE=true
+      - LOG_TO_CONSOLE=true
+      - LOG_JSON_FORMAT=${LOG_JSON_FORMAT:-false}
+      - LOG_FILE_PATH=logs/swasthasathi-service.log
+      
+      # Debug mode
+      - debug=${DEBUG:-false}
+    
+    volumes:
+      # Mount logs directory to persist logs
+      - ./logs:/app/logs
+    
+    depends_on:
+      - mongo
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  mongo:
+    image: mongo:6.0
+    container_name: swasthasathi-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=swasthasathi_db
+    volumes:
+      # Persist MongoDB data
+      - mongo_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  mongo_data:
+    driver: local
+

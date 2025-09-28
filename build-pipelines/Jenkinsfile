@@ -1,0 +1,350 @@
+pipeline {
+    agent any
+    
+    environment {
+        // Docker Configuration
+        DOCKER_REGISTRY = credentials('docker-registry-url') // Configure in Jenkins
+        DOCKER_CREDENTIALS = credentials('docker-registry-credentials') // Configure in Jenkins
+        IMAGE_NAME = 'swasthasathi-service'
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        FULL_IMAGE_NAME = "${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+        
+        // Kubernetes Configuration
+        KUBECONFIG = credentials('kubernetes-config') // Configure in Jenkins
+        K8S_NAMESPACE = 'default' // Change as needed
+        
+        // Application Configuration
+        APP_NAME = 'swasthasathi-service'
+        
+        // Notification Configuration
+        SLACK_CHANNEL = '#deployment-notifications' // Configure as needed
+        
+        // Environment Variables for Deployment
+        MONGO_CONNECTION_STRING = credentials('mongo-connection-string')
+        JWT_SECRET_KEY = credentials('jwt-secret-key')
+        BLOB_KEY = credentials('azure-blob-key')
+        BLOB_ACCOUNT_NAME = credentials('azure-blob-account-name')
+        BLOB_CONTAINER = credentials('azure-blob-container')
+        OCR_BASE_URL = credentials('ocr-base-url')
+    }
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+        retry(1)
+        skipStagesAfterUnstable()
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "🔄 Checking out source code..."
+                checkout scm
+                
+                script {
+                    // Get commit information for better tracking
+                    env.GIT_COMMIT_HASH = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
+                    env.GIT_COMMIT_MESSAGE = sh(returnStdout: true, script: 'git log -1 --pretty=%B').trim()
+                    env.BUILD_TIMESTAMP = new Date().format("yyyy-MM-dd HH:mm:ss")
+                }
+                
+                echo "📦 Build Info:"
+                echo "  - Build Number: ${BUILD_NUMBER}"
+                echo "  - Git Commit: ${env.GIT_COMMIT_HASH}"
+                echo "  - Timestamp: ${env.BUILD_TIMESTAMP}"
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                echo "🐳 Building Docker image..."
+                
+                script {
+                    // Build the Docker image
+                    sh """
+                        docker build -t ${FULL_IMAGE_NAME} .
+                        docker tag ${FULL_IMAGE_NAME} ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest
+                    """
+                    
+                    echo "✅ Docker image built successfully: ${FULL_IMAGE_NAME}"
+                }
+            }
+        }
+        
+        stage('Security Scan') {
+            steps {
+                echo "🔒 Running security scan..."
+                
+                script {
+                    try {
+                        // Run Trivy security scan (if available)
+                        sh """
+                            if command -v trivy &> /dev/null; then
+                                trivy image --exit-code 1 --severity HIGH,CRITICAL ${FULL_IMAGE_NAME}
+                            else
+                                echo "⚠️  Trivy not available, skipping security scan"
+                            fi
+                        """
+                    } catch (Exception e) {
+                        echo "⚠️  Security scan completed with warnings: ${e.getMessage()}"
+                        // Continue pipeline but mark as unstable
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+        
+        stage('Push to Registry') {
+            steps {
+                echo "📤 Pushing Docker image to registry..."
+                
+                script {
+                    // Login to Docker registry
+                    withCredentials([usernamePassword(credentialsId: 'docker-registry-credentials', 
+                                                    usernameVariable: 'DOCKER_USERNAME', 
+                                                    passwordVariable: 'DOCKER_PASSWORD')]) {
+                        sh """
+                            echo \$DOCKER_PASSWORD | docker login ${DOCKER_REGISTRY} -u \$DOCKER_USERNAME --password-stdin
+                            docker push ${FULL_IMAGE_NAME}
+                            docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest
+                        """
+                    }
+                    
+                    echo "✅ Docker image pushed successfully"
+                }
+            }
+        }
+        
+        stage('Prepare Deployment') {
+            steps {
+                echo "⚙️  Preparing Kubernetes deployment files..."
+                
+                script {
+                    // Update deployment files with current image tag
+                    sh """
+                        cd build-pipelines
+                        
+                        # Update deployment.yaml with new image tag
+                        sed -i 's|image: swasthasathi-service:latest|image: ${FULL_IMAGE_NAME}|g' deployment.yaml
+                        
+                        # Update secret.yaml with base64 encoded values
+                        echo "Updating secrets with environment-specific values..."
+                        
+                        # Create temporary secret file with actual values
+                        cat > temp-secret.yaml << EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: swasthasathi-service-secrets
+  namespace: ${K8S_NAMESPACE}
+  labels:
+    app: swasthasathi-service
+    component: secrets
+type: Opaque
+data:
+  MONGO_CONNECTION_STRING: \$(echo -n "${MONGO_CONNECTION_STRING}" | base64 -w 0)
+  JWT_SECRET_KEY: \$(echo -n "${JWT_SECRET_KEY}" | base64 -w 0)
+  BLOB_KEY: \$(echo -n "${BLOB_KEY}" | base64 -w 0)
+  BLOB_ACCOUNT_NAME: \$(echo -n "${BLOB_ACCOUNT_NAME}" | base64 -w 0)
+  BLOB_CONTAINER: \$(echo -n "${BLOB_CONTAINER}" | base64 -w 0)
+  OCR_BASE_URL: \$(echo -n "${OCR_BASE_URL}" | base64 -w 0)
+EOF
+                        
+                        # Process the template to substitute environment variables
+                        envsubst < temp-secret.yaml > processed-secret.yaml
+                        rm temp-secret.yaml
+                    """
+                }
+            }
+        }
+        
+        stage('Deploy to Kubernetes') {
+            steps {
+                echo "🚀 Deploying to Kubernetes..."
+                
+                script {
+                    // Deploy to Kubernetes using kubectl
+                    withKubeConfig([credentialsId: 'kubernetes-config']) {
+                        sh """
+                            cd build-pipelines
+                            
+                            # Create namespace if it doesn't exist
+                            kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                            
+                            # Apply configurations in order
+                            echo "📋 Applying ConfigMap..."
+                            kubectl apply -f configmap.yaml -n ${K8S_NAMESPACE}
+                            
+                            echo "🔐 Applying Secrets..."
+                            kubectl apply -f processed-secret.yaml -n ${K8S_NAMESPACE}
+                            
+                            echo "🗄️  Applying MongoDB (if needed)..."
+                            # Uncomment if you want to deploy MongoDB in cluster
+                            # kubectl apply -f mongo-deployment.yaml -n ${K8S_NAMESPACE}
+                            
+                            echo "🚀 Applying Application Deployment..."
+                            kubectl apply -f deployment.yaml -n ${K8S_NAMESPACE}
+                            kubectl apply -f service.yaml -n ${K8S_NAMESPACE}
+                            kubectl apply -f hpa.yaml -n ${K8S_NAMESPACE}
+                            
+                            echo "🌐 Applying Ingress (if configured)..."
+                            # Uncomment if you have ingress controller configured
+                            # kubectl apply -f ingress.yaml -n ${K8S_NAMESPACE}
+                            
+                            # Wait for deployment to complete
+                            echo "⏳ Waiting for deployment rollout..."
+                            kubectl rollout status deployment/${APP_NAME} -n ${K8S_NAMESPACE} --timeout=600s
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Verify Deployment') {
+            steps {
+                echo "✅ Verifying deployment..."
+                
+                script {
+                    withKubeConfig([credentialsId: 'kubernetes-config']) {
+                        // Check deployment status
+                        sh """
+                            cd build-pipelines
+                            
+                            echo "📊 Deployment Status:"
+                            kubectl get deployment ${APP_NAME} -n ${K8S_NAMESPACE}
+                            
+                            echo "📊 Pod Status:"
+                            kubectl get pods -l app=${APP_NAME} -n ${K8S_NAMESPACE}
+                            
+                            echo "📊 Service Status:"
+                            kubectl get services -l app=${APP_NAME} -n ${K8S_NAMESPACE}
+                            
+                            echo "🏥 Health Check:"
+                            # Wait a bit for pods to be ready
+                            sleep 30
+                            
+                            # Get pod name and check health
+                            POD_NAME=\$(kubectl get pods -l app=${APP_NAME} -n ${K8S_NAMESPACE} -o jsonpath='{.items[0].metadata.name}')
+                            if [ ! -z "\$POD_NAME" ]; then
+                                echo "Testing health endpoint on pod: \$POD_NAME"
+                                kubectl exec \$POD_NAME -n ${K8S_NAMESPACE} -- curl -f http://localhost:8000/health || echo "Health check failed"
+                            fi
+                        """
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "🧹 Cleaning up..."
+            
+            script {
+                // Clean up Docker images to save space
+                sh """
+                    docker rmi ${FULL_IMAGE_NAME} || true
+                    docker rmi ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest || true
+                    docker system prune -f || true
+                """
+                
+                // Clean up temporary files
+                sh """
+                    cd build-pipelines
+                    rm -f processed-secret.yaml || true
+                """
+            }
+        }
+        
+        success {
+            echo "🎉 Deployment completed successfully!"
+            
+            script {
+                // Send success notification (configure Slack plugin)
+                try {
+                    slackSend(
+                        channel: "${SLACK_CHANNEL}",
+                        color: 'good',
+                        message: """
+                            ✅ *Deployment Successful* 
+                            
+                            *Application:* ${APP_NAME}
+                            *Environment:* ${K8S_NAMESPACE}
+                            *Image:* ${FULL_IMAGE_NAME}
+                            *Build:* ${BUILD_NUMBER}
+                            *Commit:* ${env.GIT_COMMIT_HASH}
+                            *Time:* ${env.BUILD_TIMESTAMP}
+                            
+                            View build: ${BUILD_URL}
+                        """
+                    )
+                } catch (Exception e) {
+                    echo "Could not send Slack notification: ${e.getMessage()}"
+                }
+            }
+        }
+        
+        failure {
+            echo "❌ Deployment failed!"
+            
+            script {
+                // Send failure notification
+                try {
+                    slackSend(
+                        channel: "${SLACK_CHANNEL}",
+                        color: 'danger',
+                        message: """
+                            ❌ *Deployment Failed*
+                            
+                            *Application:* ${APP_NAME}
+                            *Environment:* ${K8S_NAMESPACE}
+                            *Build:* ${BUILD_NUMBER}
+                            *Commit:* ${env.GIT_COMMIT_HASH}
+                            *Time:* ${env.BUILD_TIMESTAMP}
+                            
+                            View build: ${BUILD_URL}
+                            
+                            Please check the logs and fix the issues.
+                        """
+                    )
+                } catch (Exception e) {
+                    echo "Could not send Slack notification: ${e.getMessage()}"
+                }
+                
+                // Get logs from failed pods for debugging
+                withKubeConfig([credentialsId: 'kubernetes-config']) {
+                    sh """
+                        echo "🔍 Getting logs from failed pods:"
+                        kubectl logs -l app=${APP_NAME} -n ${K8S_NAMESPACE} --tail=100 || true
+                        kubectl describe deployment ${APP_NAME} -n ${K8S_NAMESPACE} || true
+                    """
+                }
+            }
+        }
+        
+        unstable {
+            echo "⚠️  Build completed with warnings"
+            
+            script {
+                try {
+                    slackSend(
+                        channel: "${SLACK_CHANNEL}",
+                        color: 'warning',
+                        message: """
+                            ⚠️  *Deployment Completed with Warnings*
+                            
+                            *Application:* ${APP_NAME}
+                            *Environment:* ${K8S_NAMESPACE}
+                            *Build:* ${BUILD_NUMBER}
+                            *Commit:* ${env.GIT_COMMIT_HASH}
+                            
+                            Please review the build logs: ${BUILD_URL}
+                        """
+                    )
+                } catch (Exception e) {
+                    echo "Could not send Slack notification: ${e.getMessage()}"
+                }
+            }
+        }
+    }
+}
