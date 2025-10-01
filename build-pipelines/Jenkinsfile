@@ -19,13 +19,13 @@ pipeline {
         // Notification Configuration
         SLACK_CHANNEL = '#deployment-notifications' // Configure as needed
         
-        // Environment Variables for Deployment
-        MONGO_CONNECTION_STRING = credentials('mongo-connection-string')
-        JWT_SECRET_KEY = credentials('jwt-secret-key')
-        BLOB_KEY = credentials('azure-blob-key')
-        BLOB_ACCOUNT_NAME = credentials('azure-blob-account-name')
-        BLOB_CONTAINER = credentials('azure-blob-container')
-        OCR_BASE_URL = credentials('ocr-base-url')
+        // Environment Variables for Deployment (using default values for now)
+        MONGO_CONNECTION_STRING = 'mongodb://mongo:27017'
+        JWT_SECRET_KEY = 'your-super-secret-jwt-key-here-make-it-long-and-random'
+        BLOB_KEY = 'your-azure-blob-storage-key-here'
+        BLOB_ACCOUNT_NAME = 'your-azure-storage-account-name'
+        BLOB_CONTAINER = 'your-blob-container-name'
+        OCR_BASE_URL = 'http://your-ocr-service-url'
     }
     
     options {
@@ -127,32 +127,7 @@ pipeline {
                         # Update deployment.yaml with new image tag
                         sed -i 's|image: swasthasathi-service:latest|image: ${FULL_IMAGE_NAME}|g' deployment.yaml
                         
-                        # Update secret.yaml with base64 encoded values
-                        echo "Updating secrets with environment-specific values..."
-                        
-                        # Create temporary secret file with actual values
-                        cat > temp-secret.yaml << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: swasthasathi-service-secrets
-  namespace: ${K8S_NAMESPACE}
-  labels:
-    app: swasthasathi-service
-    component: secrets
-type: Opaque
-data:
-  MONGO_CONNECTION_STRING: \$(echo -n "${MONGO_CONNECTION_STRING}" | base64 -w 0)
-  JWT_SECRET_KEY: \$(echo -n "${JWT_SECRET_KEY}" | base64 -w 0)
-  BLOB_KEY: \$(echo -n "${BLOB_KEY}" | base64 -w 0)
-  BLOB_ACCOUNT_NAME: \$(echo -n "${BLOB_ACCOUNT_NAME}" | base64 -w 0)
-  BLOB_CONTAINER: \$(echo -n "${BLOB_CONTAINER}" | base64 -w 0)
-  OCR_BASE_URL: \$(echo -n "${OCR_BASE_URL}" | base64 -w 0)
-EOF
-                        
-                        # Process the template to substitute environment variables
-                        envsubst < temp-secret.yaml > processed-secret.yaml
-                        rm temp-secret.yaml
+                        echo "Using existing secret.yaml configuration..."
                     """
                 }
             }
