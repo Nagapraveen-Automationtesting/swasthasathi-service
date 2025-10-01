@@ -9,16 +9,11 @@ pipeline {
         FULL_IMAGE_NAME = "${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
         
         // Kubernetes Configuration
-        KUBECONFIG = '' // Using default kubeconfig
+        KUBECONFIG = ''
         K8S_NAMESPACE = 'swasthasathi'
-        
-        // Application Configuration
         APP_NAME = 'swasthasathi-service'
         
-        // Notification Configuration
-        SLACK_CHANNEL = '#deployment-notifications' // Configure as needed
-        
-        // Environment Variables for Deployment (using default values for now)
+        // Environment Variables
         MONGO_CONNECTION_STRING = 'mongodb://mongo:27017'
         JWT_SECRET_KEY = 'your-super-secret-jwt-key-here-make-it-long-and-random'
         BLOB_KEY = 'your-azure-blob-storage-key-here'
@@ -31,7 +26,6 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timeout(time: 30, unit: 'MINUTES')
         retry(1)
-        skipStagesAfterUnstable()
     }
     
     stages {
@@ -41,7 +35,6 @@ pipeline {
                 checkout scm
                 
                 script {
-                    // Get commit information for better tracking
                     env.GIT_COMMIT_HASH = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
                     env.GIT_COMMIT_MESSAGE = sh(returnStdout: true, script: 'git log -1 --pretty=%B').trim()
                     env.BUILD_TIMESTAMP = new Date().format("yyyy-MM-dd HH:mm:ss")
@@ -59,7 +52,6 @@ pipeline {
                 echo "🐳 Building Docker image..."
                 
                 script {
-                    // Build the Docker image
                     sh """
                         docker build -t ${FULL_IMAGE_NAME} .
                         docker tag ${FULL_IMAGE_NAME} ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest
@@ -76,7 +68,6 @@ pipeline {
                 
                 script {
                     try {
-                        // Run Trivy security scan (if available)
                         sh """
                             if command -v trivy &> /dev/null; then
                                 trivy image --exit-code 1 --severity HIGH,CRITICAL ${FULL_IMAGE_NAME}
@@ -86,7 +77,6 @@ pipeline {
                         """
                     } catch (Exception e) {
                         echo "⚠️  Security scan completed with warnings: ${e.getMessage()}"
-                        // Continue pipeline but mark as unstable
                         currentBuild.result = 'UNSTABLE'
                     }
                 }
@@ -98,7 +88,6 @@ pipeline {
                 echo "📤 Pushing Docker image to registry..."
                 
                 script {
-                    // Push Docker image (assuming already logged in)
                     sh """
                         docker push ${FULL_IMAGE_NAME}
                         docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest
@@ -114,7 +103,6 @@ pipeline {
                 echo "⚙️  Preparing Kubernetes deployment files..."
                 
                 script {
-                    // Update deployment files with current image tag
                     sh """
                         cd build-pipelines
                         
@@ -132,19 +120,16 @@ pipeline {
                 echo "🚀 Deploying to Kubernetes..."
                 
                 script {
-                    // Deploy to Kubernetes using kubectl
-                    // Using default kubeconfig
-                        sh """
-                            cd build-pipelines
-                            
-                            # Create namespace if it doesn't exist
-                            kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                            
-                            # Use deployment script to handle deployment
-                            chmod +x deploy.sh
-                            ./deploy.sh
-                        """
-                    }
+                    sh """
+                        cd build-pipelines
+                        
+                        # Create namespace if it doesn't exist
+                        kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                        
+                        # Use deployment script to handle deployment
+                        chmod +x deploy.sh
+                        ./deploy.sh
+                    """
                 }
             }
         }
@@ -154,8 +139,6 @@ pipeline {
                 echo "✅ Verifying deployment..."
                 
                 script {
-                    // Using default kubeconfig
-                    // Check deployment status
                     sh """
                         cd build-pipelines
                         
@@ -169,10 +152,8 @@ pipeline {
                         kubectl get services -l app=${APP_NAME} -n ${K8S_NAMESPACE}
                         
                         echo "🏥 Health Check:"
-                        # Wait a bit for pods to be ready
                         sleep 30
                         
-                        # Get pod name and check health
                         POD_NAME=\$(kubectl get pods -l app=${APP_NAME} -n ${K8S_NAMESPACE} -o jsonpath='{.items[0].metadata.name}')
                         if [ ! -z "\$POD_NAME" ]; then
                             echo "Testing health endpoint on pod: \$POD_NAME"
@@ -189,14 +170,12 @@ pipeline {
             echo "🧹 Cleaning up..."
             
             script {
-                // Clean up Docker images to save space
                 sh """
                     docker rmi ${FULL_IMAGE_NAME} || true
                     docker rmi ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest || true
                     docker system prune -f || true
                 """
                 
-                // Clean up temporary files
                 sh """
                     cd build-pipelines
                     rm -f processed-secret.yaml || true
@@ -206,60 +185,12 @@ pipeline {
         
         success {
             echo "🎉 Deployment completed successfully!"
-            
-            script {
-                // Send success notification (configure Slack plugin)
-                try {
-                    slackSend(
-                        channel: "${SLACK_CHANNEL}",
-                        color: 'good',
-                        message: """
-                            ✅ *Deployment Successful* 
-                            
-                            *Application:* ${APP_NAME}
-                            *Environment:* ${K8S_NAMESPACE}
-                            *Image:* ${FULL_IMAGE_NAME}
-                            *Build:* ${BUILD_NUMBER}
-                            *Commit:* ${env.GIT_COMMIT_HASH}
-                            *Time:* ${env.BUILD_TIMESTAMP}
-                            
-                            View build: ${BUILD_URL}
-                        """
-                    )
-                } catch (Exception e) {
-                    echo "Could not send Slack notification: ${e.getMessage()}"
-                }
-            }
         }
         
         failure {
             echo "❌ Deployment failed!"
             
             script {
-                // Send failure notification
-                try {
-                    slackSend(
-                        channel: "${SLACK_CHANNEL}",
-                        color: 'danger',
-                        message: """
-                            ❌ *Deployment Failed*
-                            
-                            *Application:* ${APP_NAME}
-                            *Environment:* ${K8S_NAMESPACE}
-                            *Build:* ${BUILD_NUMBER}
-                            *Commit:* ${env.GIT_COMMIT_HASH}
-                            *Time:* ${env.BUILD_TIMESTAMP}
-                            
-                            View build: ${BUILD_URL}
-                            
-                            Please check the logs and fix the issues.
-                        """
-                    )
-                } catch (Exception e) {
-                    echo "Could not send Slack notification: ${e.getMessage()}"
-                }
-                
-                // Get logs from failed pods for debugging
                 sh """
                     echo "🔍 Getting logs from failed pods:"
                     kubectl logs -l app=${APP_NAME} -n ${K8S_NAMESPACE} --tail=100 || true
@@ -270,28 +201,6 @@ pipeline {
         
         unstable {
             echo "⚠️  Build completed with warnings"
-            
-            script {
-                try {
-                    slackSend(
-                        channel: "${SLACK_CHANNEL}",
-                        color: 'warning',
-                        message: """
-                            ⚠️  *Deployment Completed with Warnings*
-                            
-                            *Application:* ${APP_NAME}
-                            *Environment:* ${K8S_NAMESPACE}
-                            *Build:* ${BUILD_NUMBER}
-                            *Commit:* ${env.GIT_COMMIT_HASH}
-                            
-                            Please review the build logs: ${BUILD_URL}
-                        """
-                    )
-                } catch (Exception e) {
-                    echo "Could not send Slack notification: ${e.getMessage()}"
-                }
-            }
         }
     }
 }
-
