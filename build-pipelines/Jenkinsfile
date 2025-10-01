@@ -179,7 +179,6 @@ pipeline {
                                 kubectl exec \$POD_NAME -n ${K8S_NAMESPACE} -- curl -f http://localhost:8000/health || echo "Health check failed"
                             fi
                         """
-                    }
                 }
             }
         }
