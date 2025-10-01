@@ -155,8 +155,8 @@ pipeline {
                 
                 script {
                     // Using default kubeconfig
-                        // Check deployment status
-                        sh """
+                    // Check deployment status
+                    sh """
                             cd build-pipelines
                             
                             echo "📊 Deployment Status:"
@@ -182,6 +182,7 @@ pipeline {
                 }
             }
         }
+    }
     }
     
     post {
@@ -260,13 +261,11 @@ pipeline {
                 }
                 
                 // Get logs from failed pods for debugging
-                withKubeConfig([credentialsId: 'kubernetes-config']) {
-                    sh """
-                        echo "🔍 Getting logs from failed pods:"
-                        kubectl logs -l app=${APP_NAME} -n ${K8S_NAMESPACE} --tail=100 || true
-                        kubectl describe deployment ${APP_NAME} -n ${K8S_NAMESPACE} || true
-                    """
-                }
+                sh """
+                    echo "🔍 Getting logs from failed pods:"
+                    kubectl logs -l app=${APP_NAME} -n ${K8S_NAMESPACE} --tail=100 || true
+                    kubectl describe deployment ${APP_NAME} -n ${K8S_NAMESPACE} || true
+                """
             }
         }
         
