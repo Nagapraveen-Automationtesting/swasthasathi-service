@@ -157,28 +157,28 @@ pipeline {
                     // Using default kubeconfig
                     // Check deployment status
                     sh """
-                            cd build-pipelines
-                            
-                            echo "📊 Deployment Status:"
-                            kubectl get deployment ${APP_NAME} -n ${K8S_NAMESPACE}
-                            
-                            echo "📊 Pod Status:"
-                            kubectl get pods -l app=${APP_NAME} -n ${K8S_NAMESPACE}
-                            
-                            echo "📊 Service Status:"
-                            kubectl get services -l app=${APP_NAME} -n ${K8S_NAMESPACE}
-                            
-                            echo "🏥 Health Check:"
-                            # Wait a bit for pods to be ready
-                            sleep 30
-                            
-                            # Get pod name and check health
-                            POD_NAME=\$(kubectl get pods -l app=${APP_NAME} -n ${K8S_NAMESPACE} -o jsonpath='{.items[0].metadata.name}')
-                            if [ ! -z "\$POD_NAME" ]; then
-                                echo "Testing health endpoint on pod: \$POD_NAME"
-                                kubectl exec \$POD_NAME -n ${K8S_NAMESPACE} -- curl -f http://localhost:8000/health || echo "Health check failed"
-                            fi
-                        """
+                        cd build-pipelines
+                        
+                        echo "📊 Deployment Status:"
+                        kubectl get deployment ${APP_NAME} -n ${K8S_NAMESPACE}
+                        
+                        echo "📊 Pod Status:"
+                        kubectl get pods -l app=${APP_NAME} -n ${K8S_NAMESPACE}
+                        
+                        echo "📊 Service Status:"
+                        kubectl get services -l app=${APP_NAME} -n ${K8S_NAMESPACE}
+                        
+                        echo "🏥 Health Check:"
+                        # Wait a bit for pods to be ready
+                        sleep 30
+                        
+                        # Get pod name and check health
+                        POD_NAME=\$(kubectl get pods -l app=${APP_NAME} -n ${K8S_NAMESPACE} -o jsonpath='{.items[0].metadata.name}')
+                        if [ ! -z "\$POD_NAME" ]; then
+                            echo "Testing health endpoint on pod: \$POD_NAME"
+                            kubectl exec \$POD_NAME -n ${K8S_NAMESPACE} -- curl -f http://localhost:8000/health || echo "Health check failed"
+                        fi
+                    """
                 }
             }
         }
