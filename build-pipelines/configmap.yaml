@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: swasthasathi-service-config
-  namespace: default
+  namespace: swasthasathi
   labels:
     app: swasthasathi-service
     component: config
@@ -30,4 +30,5 @@ data:
   DEBUG: "false"
   
   # CORS Origins (update with your frontend URLs)
-  CORS_ORIGINS: "https://your-frontend-domain.com"
+  CORS_ORIGINS: "http://localhost,http://localhost:32026,https://localhost"
+

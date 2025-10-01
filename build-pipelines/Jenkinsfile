@@ -11,7 +11,7 @@ pipeline {
         
         // Kubernetes Configuration
         KUBECONFIG = credentials('kubernetes-config') // Configure in Jenkins
-        K8S_NAMESPACE = 'default' // Change as needed
+        K8S_NAMESPACE = 'swasthasathi'
         
         // Application Configuration
         APP_NAME = 'swasthasathi-service'
@@ -171,29 +171,9 @@ EOF
                             # Create namespace if it doesn't exist
                             kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                             
-                            # Apply configurations in order
-                            echo "📋 Applying ConfigMap..."
-                            kubectl apply -f configmap.yaml -n ${K8S_NAMESPACE}
-                            
-                            echo "🔐 Applying Secrets..."
-                            kubectl apply -f processed-secret.yaml -n ${K8S_NAMESPACE}
-                            
-                            echo "🗄️  Applying MongoDB (if needed)..."
-                            # Uncomment if you want to deploy MongoDB in cluster
-                            # kubectl apply -f mongo-deployment.yaml -n ${K8S_NAMESPACE}
-                            
-                            echo "🚀 Applying Application Deployment..."
-                            kubectl apply -f deployment.yaml -n ${K8S_NAMESPACE}
-                            kubectl apply -f service.yaml -n ${K8S_NAMESPACE}
-                            kubectl apply -f hpa.yaml -n ${K8S_NAMESPACE}
-                            
-                            echo "🌐 Applying Ingress (if configured)..."
-                            # Uncomment if you have ingress controller configured
-                            # kubectl apply -f ingress.yaml -n ${K8S_NAMESPACE}
-                            
-                            # Wait for deployment to complete
-                            echo "⏳ Waiting for deployment rollout..."
-                            kubectl rollout status deployment/${APP_NAME} -n ${K8S_NAMESPACE} --timeout=600s
+                            # Use deployment script to handle deployment
+                            chmod +x deploy.sh
+                            ./deploy.sh
                         """
                     }
                 }
@@ -348,3 +328,4 @@ EOF
         }
     }
 }
+
