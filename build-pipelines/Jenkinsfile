@@ -3,14 +3,13 @@ pipeline {
     
     environment {
         // Docker Configuration
-        DOCKER_REGISTRY = credentials('docker-registry-url') // Configure in Jenkins
-        DOCKER_CREDENTIALS = credentials('docker-registry-credentials') // Configure in Jenkins
+        DOCKER_REGISTRY = 'ghcr.io/nagapraveen-automationtesting'
         IMAGE_NAME = 'swasthasathi-service'
         IMAGE_TAG = "${BUILD_NUMBER}"
         FULL_IMAGE_NAME = "${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
         
         // Kubernetes Configuration
-        KUBECONFIG = credentials('kubernetes-config') // Configure in Jenkins
+        KUBECONFIG = '' // Using default kubeconfig
         K8S_NAMESPACE = 'swasthasathi'
         
         // Application Configuration
@@ -99,16 +98,11 @@ pipeline {
                 echo "📤 Pushing Docker image to registry..."
                 
                 script {
-                    // Login to Docker registry
-                    withCredentials([usernamePassword(credentialsId: 'docker-registry-credentials', 
-                                                    usernameVariable: 'DOCKER_USERNAME', 
-                                                    passwordVariable: 'DOCKER_PASSWORD')]) {
-                        sh """
-                            echo \$DOCKER_PASSWORD | docker login ${DOCKER_REGISTRY} -u \$DOCKER_USERNAME --password-stdin
-                            docker push ${FULL_IMAGE_NAME}
-                            docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest
-                        """
-                    }
+                    // Push Docker image (assuming already logged in)
+                    sh """
+                        docker push ${FULL_IMAGE_NAME}
+                        docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest
+                    """
                     
                     echo "✅ Docker image pushed successfully"
                 }
@@ -139,7 +133,7 @@ pipeline {
                 
                 script {
                     // Deploy to Kubernetes using kubectl
-                    withKubeConfig([credentialsId: 'kubernetes-config']) {
+                    // Using default kubeconfig
                         sh """
                             cd build-pipelines
                             
@@ -160,7 +154,7 @@ pipeline {
                 echo "✅ Verifying deployment..."
                 
                 script {
-                    withKubeConfig([credentialsId: 'kubernetes-config']) {
+                    // Using default kubeconfig
                         // Check deployment status
                         sh """
                             cd build-pipelines
