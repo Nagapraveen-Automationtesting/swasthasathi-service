@@ -5,9 +5,6 @@ pipeline {
         // Docker Configuration
         DOCKER_REGISTRY = 'ghcr.io'
         DOCKER_REPOSITORY = 'nagapraveen-automationtesting/swasthasathi-service'
-        IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT.substring(0,7)}"
-        DOCKER_IMAGE = "${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${IMAGE_TAG}"
-        DOCKER_LATEST = "${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:latest"
         
         // Kubernetes Configuration
         K8S_NAMESPACE = 'swasthasathi'
@@ -56,11 +53,18 @@ pipeline {
                         returnStdout: true
                     ).trim()
                     
+                    // Set dynamic environment variables
+                    env.IMAGE_TAG = "${BUILD_NUMBER}-${env.GIT_COMMIT.substring(0,7)}"
+                    env.DOCKER_IMAGE = "${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${env.IMAGE_TAG}"
+                    env.DOCKER_LATEST = "${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:latest"
+                    
                     echo "📋 Build Information:"
                     echo "   Git Commit: ${env.GIT_COMMIT}"
                     echo "   Git Branch: ${env.GIT_BRANCH}"
                     echo "   Build Number: ${BUILD_NUMBER}"
-                    echo "   Docker Image: ${DOCKER_IMAGE}"
+                    echo "   Image Tag: ${env.IMAGE_TAG}"
+                    echo "   Docker Image: ${env.DOCKER_IMAGE}"
+                    echo "   Docker Latest: ${env.DOCKER_LATEST}"
                 }
             }
         }
@@ -152,12 +156,12 @@ EOF
                     
                     // Build the Docker image
                     sh """
-                        echo "Building Docker image: ${DOCKER_IMAGE}"
+                        echo "Building Docker image: ${env.DOCKER_IMAGE}"
                         docker build \\
-                            -t ${DOCKER_IMAGE} \\
-                            -t ${DOCKER_LATEST} \\
+                            -t ${env.DOCKER_IMAGE} \\
+                            -t ${env.DOCKER_LATEST} \\
                             --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \\
-                            --build-arg VCS_REF=${GIT_COMMIT} \\
+                            --build-arg VCS_REF=${env.GIT_COMMIT} \\
                             --build-arg BUILD_NUMBER=${BUILD_NUMBER} \\
                             -f ${DOCKERFILE} \\
                             ${BUILD_CONTEXT}
@@ -185,10 +189,10 @@ EOF
                         
                         # Run Trivy scan
                         echo "🔍 Scanning image for vulnerabilities..."
-                        trivy image --exit-code 0 --severity HIGH,CRITICAL --format table ${DOCKER_IMAGE} || echo "Security scan completed with findings"
+                        trivy image --exit-code 0 --severity HIGH,CRITICAL --format table ${env.DOCKER_IMAGE} || echo "Security scan completed with findings"
                         
                         # Generate JSON report for archiving
-                        trivy image --format json --output trivy-report.json ${DOCKER_IMAGE} || echo "JSON report generated"
+                        trivy image --format json --output trivy-report.json ${env.DOCKER_IMAGE} || echo "JSON report generated"
                     """
                 }
             }
@@ -386,17 +390,23 @@ EOF
     
     post {
         always {
-            script {
-                echo "🧹 Performing cleanup..."
-                
-                // Clean up Docker images to save space
-                sh '''
-                    echo "🗑️  Cleaning up Docker images..."
-                    docker system prune -f --volumes || echo "Docker cleanup completed"
+            node {
+                script {
+                    echo "🧹 Performing cleanup..."
                     
-                    # Remove build artifacts
-                    rm -rf k8s-deploy test-venv __pycache__ .pytest_cache || true
-                '''
+                    // Clean up Docker images to save space (only if docker is available)
+                    sh '''
+                        echo "🗑️  Cleaning up Docker images..."
+                        if command -v docker &> /dev/null; then
+                            docker system prune -f --volumes || echo "Docker cleanup completed"
+                        else
+                            echo "Docker not available, skipping cleanup"
+                        fi
+                        
+                        # Remove build artifacts
+                        rm -rf k8s-deploy test-venv __pycache__ .pytest_cache || true
+                    '''
+                }
             }
         }
         
@@ -406,11 +416,11 @@ EOF
                 echo """
                 🎉 Deployment Summary:
                    • Application: ${APP_NAME}
-                   • Image: ${DOCKER_IMAGE}
+                   • Image: ${env.DOCKER_IMAGE}
                    • Namespace: ${K8S_NAMESPACE}
                    • Build: #${BUILD_NUMBER}
-                   • Commit: ${GIT_COMMIT?.substring(0,7)}
-                   • Branch: ${GIT_BRANCH}
+                   • Commit: ${env.GIT_COMMIT?.substring(0,7)}
+                   • Branch: ${env.GIT_BRANCH}
                 """
                 
                 // Send success notification (uncomment and configure if Slack is available)
@@ -419,33 +429,39 @@ EOF
                 //     color: 'good',
                 //     message: "✅ *${APP_NAME}* deployed successfully!\n" +
                 //              "Build: #${BUILD_NUMBER}\n" +
-                //              "Image: `${DOCKER_IMAGE}`\n" +
-                //              "Commit: ${GIT_COMMIT?.substring(0,7)}"
+                //              "Image: `${env.DOCKER_IMAGE}`\n" +
+                //              "Commit: ${env.GIT_COMMIT?.substring(0,7)}"
                 // )
             }
         }
         
         failure {
-            script {
-                echo "❌ Pipeline failed!"
-                
-                // Show some debugging information
-                sh '''
-                    echo "🔍 Debug Information:"
-                    echo "Build Number: ${BUILD_NUMBER}"
-                    echo "Git Commit: ${GIT_COMMIT:-'unknown'}"
-                    echo "Docker Images:"
-                    docker images | grep ${DOCKER_REPOSITORY} || echo "No images found"
-                '''
-                
-                // Send failure notification (uncomment and configure if Slack is available)
-                // slackSend(
-                //     channel: '#deployments',
-                //     color: 'danger',
-                //     message: "❌ *${APP_NAME}* deployment failed!\n" +
-                //              "Build: #${BUILD_NUMBER}\n" +
-                //              "Check: ${BUILD_URL}console"
-                // )
+            node {
+                script {
+                    echo "❌ Pipeline failed!"
+                    
+                    // Show some debugging information
+                    sh '''
+                        echo "🔍 Debug Information:"
+                        echo "Build Number: ${BUILD_NUMBER}"
+                        echo "Git Commit: ${GIT_COMMIT:-'unknown'}"
+                        echo "Docker Images:"
+                        if command -v docker &> /dev/null; then
+                            docker images | grep ${DOCKER_REPOSITORY} || echo "No images found"
+                        else
+                            echo "Docker not available"
+                        fi
+                    '''
+                    
+                    // Send failure notification (uncomment and configure if Slack is available)
+                    // slackSend(
+                    //     channel: '#deployments',
+                    //     color: 'danger',
+                    //     message: "❌ *${APP_NAME}* deployment failed!\n" +
+                    //              "Build: #${BUILD_NUMBER}\n" +
+                    //              "Check: ${BUILD_URL}console"
+                    // )
+                }
             }
         }
         
