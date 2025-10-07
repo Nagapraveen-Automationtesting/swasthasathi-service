@@ -390,7 +390,7 @@ EOF
     
     post {
         always {
-            node {
+            node('any') {
                 script {
                     echo "🧹 Performing cleanup..."
                     
@@ -436,7 +436,7 @@ EOF
         }
         
         failure {
-            node {
+            node('any') {
                 script {
                     echo "❌ Pipeline failed!"
                     
