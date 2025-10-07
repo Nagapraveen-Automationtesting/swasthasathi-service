@@ -163,7 +163,6 @@ except ImportError as e:
         """Dummy test when app cannot be imported"""
         pytest.skip("App not available for testing")
 EOF
-                        fi
                         
                         # Run pytest with better error handling
                         echo "🧪 Running tests..."
