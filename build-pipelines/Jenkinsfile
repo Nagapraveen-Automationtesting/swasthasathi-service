@@ -77,7 +77,7 @@ pipeline {
                     // Check Python version
                     sh '''
                         echo "🐍 Python version check:"
-                        python3 --version || python --version
+                        python --version
                         
                         echo "🐳 Docker version check:"
                         docker --version
@@ -95,8 +95,17 @@ pipeline {
                     echo "📦 Installing Python dependencies and running tests..."
                     sh '''
                         # Create virtual environment
-                        python3 -m venv test-venv || python -m venv test-venv
-                        . test-venv/bin/activate
+                        python -m venv test-venv
+                        
+                        # Activate virtual environment (Windows compatible)
+                        if [ -f "test-venv/Scripts/activate" ]; then
+                            . test-venv/Scripts/activate
+                        elif [ -f "test-venv/bin/activate" ]; then
+                            . test-venv/bin/activate
+                        else
+                            echo "Virtual environment activation script not found"
+                            exit 1
+                        fi
                         
                         # Upgrade pip
                         pip install --upgrade pip
@@ -137,9 +146,13 @@ def test_docs_endpoint():
 EOF
                         fi
                         
-                        # Run pytest
+                        # Run pytest with better error handling
                         echo "🧪 Running tests..."
-                        pytest tests/ -v --tb=short || echo "Tests completed with issues"
+                        if [ -d "tests" ] && [ "$(ls -A tests)" ]; then
+                            pytest tests/ -v --tb=short || echo "Tests completed with issues"
+                        else
+                            echo "No tests found, skipping test execution"
+                        fi
                         
                         # Cleanup
                         deactivate
