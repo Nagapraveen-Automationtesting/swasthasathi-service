@@ -390,23 +390,21 @@ EOF
     
     post {
         always {
-            node('any') {
-                script {
-                    echo "🧹 Performing cleanup..."
+            script {
+                echo "🧹 Performing cleanup..."
+                
+                // Clean up Docker images to save space (only if docker is available)
+                sh '''
+                    echo "🗑️  Cleaning up Docker images..."
+                    if command -v docker &> /dev/null; then
+                        docker system prune -f --volumes || echo "Docker cleanup completed"
+                    else
+                        echo "Docker not available, skipping cleanup"
+                    fi
                     
-                    // Clean up Docker images to save space (only if docker is available)
-                    sh '''
-                        echo "🗑️  Cleaning up Docker images..."
-                        if command -v docker &> /dev/null; then
-                            docker system prune -f --volumes || echo "Docker cleanup completed"
-                        else
-                            echo "Docker not available, skipping cleanup"
-                        fi
-                        
-                        # Remove build artifacts
-                        rm -rf k8s-deploy test-venv __pycache__ .pytest_cache || true
-                    '''
-                }
+                    # Remove build artifacts
+                    rm -rf k8s-deploy test-venv __pycache__ .pytest_cache || true
+                '''
             }
         }
         
@@ -436,32 +434,30 @@ EOF
         }
         
         failure {
-            node('any') {
-                script {
-                    echo "❌ Pipeline failed!"
-                    
-                    // Show some debugging information
-                    sh '''
-                        echo "🔍 Debug Information:"
-                        echo "Build Number: ${BUILD_NUMBER}"
-                        echo "Git Commit: ${GIT_COMMIT:-'unknown'}"
-                        echo "Docker Images:"
-                        if command -v docker &> /dev/null; then
-                            docker images | grep ${DOCKER_REPOSITORY} || echo "No images found"
-                        else
-                            echo "Docker not available"
-                        fi
-                    '''
-                    
-                    // Send failure notification (uncomment and configure if Slack is available)
-                    // slackSend(
-                    //     channel: '#deployments',
-                    //     color: 'danger',
-                    //     message: "❌ *${APP_NAME}* deployment failed!\n" +
-                    //              "Build: #${BUILD_NUMBER}\n" +
-                    //              "Check: ${BUILD_URL}console"
-                    // )
-                }
+            script {
+                echo "❌ Pipeline failed!"
+                
+                // Show some debugging information
+                sh '''
+                    echo "🔍 Debug Information:"
+                    echo "Build Number: ${BUILD_NUMBER}"
+                    echo "Git Commit: ${GIT_COMMIT:-'unknown'}"
+                    echo "Docker Images:"
+                    if command -v docker &> /dev/null; then
+                        docker images | grep ${DOCKER_REPOSITORY} || echo "No images found"
+                    else
+                        echo "Docker not available"
+                    fi
+                '''
+                
+                // Send failure notification (uncomment and configure if Slack is available)
+                // slackSend(
+                //     channel: '#deployments',
+                //     color: 'danger',
+                //     message: "❌ *${APP_NAME}* deployment failed!\n" +
+                //              "Build: #${BUILD_NUMBER}\n" +
+                //              "Check: ${BUILD_URL}console"
+                // )
             }
         }
         
